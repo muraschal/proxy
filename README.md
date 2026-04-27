@@ -37,26 +37,65 @@ A self-hosted forward proxy with a **Swiss (CH) egress IP**, running on a Proxmo
 
 ## Architecture
 
-```
-Friend's device
-    │
-    │  cloudflared access tcp (TLS)
-    ▼
-Cloudflare Edge  ──── proxy.rapold.io / socks.rapold.io
-    │
-    │  Cloudflare Tunnel (outbound only, no open ports)
-    ▼
-pve1.rapold.io  (Proxmox host)
-    │  cloudflared-proxy-ch.service
-    │
-    │  LAN  192.168.1.x
-    ▼
-CT 105  192.168.1.50  (Debian 12 LXC)
-    │  3proxy  :38128 HTTP  |  :31080 SOCKS5
-    │  nftables  (drop-all ingress)
-    │  fail2ban  (brute-force protection)
-    ▼
-Swiss Internet  →  213.3.19.53 / Zürich / CH
+```mermaid
+flowchart TD
+    subgraph CLIENT["👤 Client (Friend's Device)"]
+        direction TB
+        CL["cloudflared access tcp\n--hostname proxy.rapold.io\n--url localhost:8128"]
+        APP["Any App / Browser\nhttp://127.0.0.1:8128"]
+        APP -->|HTTP CONNECT / SOCKS5| CL
+    end
+
+    subgraph CF["☁️ Cloudflare Edge"]
+        direction LR
+        DNS_H["proxy.rapold.io"]
+        DNS_S["socks.rapold.io"]
+        DNS_D["dashboard.rapold.io"]
+    end
+
+    subgraph PVE["🖥️ pve1.rapold.io — Proxmox Host"]
+        direction TB
+        CFD["cloudflared-proxy-ch.service\nTunnel: f5199655…"]
+    end
+
+    subgraph LXC["📦 CT 105 — Debian 12 LXC  192.168.1.50"]
+        direction TB
+        P38["3proxy\n:38128 HTTP CONNECT"]
+        P31["3proxy\n:31080 SOCKS5"]
+        DASH["Dashboard\n:8080 HTTP"]
+        NFT["nftables\ndrop-all ingress"]
+        F2B["fail2ban\n5 retries → 1h ban"]
+
+        NFT -->|allows :38128 :31080 :8080| P38
+        NFT -->|allows :38128 :31080 :8080| P31
+        NFT -->|allows :38128 :31080 :8080| DASH
+        P38 & P31 --> F2B
+    end
+
+    subgraph CH["🇨🇭 Swiss Internet"]
+        EGR["Egress IP\n213.3.19.53\nZürich · AS3303 Swisscom"]
+    end
+
+    CL -->|"TLS (outbound only)"| DNS_H
+    CL -->|"TLS (outbound only)"| DNS_S
+    DNS_H & DNS_S & DNS_D -->|"Cloudflare Tunnel\n(no open ports on router)"| CFD
+    CFD -->|"LAN 192.168.1.x"| P38
+    CFD -->|"LAN 192.168.1.x"| P31
+    CFD -->|"LAN 192.168.1.x"| DASH
+    P38 & P31 --> EGR
+
+    subgraph CICD["⚙️ GitHub Actions"]
+        GHA["deploy.yml\nTailscale SSH → pct exec\nSmoke-test CH egress"]
+    end
+    GHA -->|"deploy configs"| PVE
+    GHA -->|"pct exec"| LXC
+
+    style CLIENT fill:#1a2332,stroke:#58a6ff,color:#e6edf3
+    style CF     fill:#1a1f2e,stroke:#f6821f,color:#e6edf3
+    style PVE    fill:#1a2a1a,stroke:#3fb950,color:#e6edf3
+    style LXC    fill:#1a2a1a,stroke:#3fb950,color:#e6edf3
+    style CH     fill:#2a1f1a,stroke:#d29922,color:#e6edf3
+    style CICD   fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
 ```
 
 **Key design decisions:**
