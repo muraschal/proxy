@@ -41,16 +41,17 @@ A self-hosted forward proxy with a **Swiss (CH) egress IP**, running on a Proxmo
 flowchart TD
     subgraph CLIENT["👤 Client (Friend's Device)"]
         direction TB
-        CL["cloudflared access tcp\n--hostname proxy.rapold.io\n--url localhost:8128"]
+        WS["wstunnel client\n-L tcp://127.0.0.1:8128:127.0.0.1:38128\nwss://tcp.rapold.io"]
         APP["Any App / Browser\nhttp://127.0.0.1:8128"]
-        APP -->|HTTP CONNECT / SOCKS5| CL
+        APP -->|HTTP CONNECT / SOCKS5| WS
     end
 
-    subgraph CF["☁️ Cloudflare Edge"]
+    subgraph CF["☁️ Cloudflare Edge (Orange Cloud)"]
         direction LR
-        DNS_H["proxy.rapold.io"]
-        DNS_S["socks.rapold.io"]
-        DNS_D["dashboard.rapold.io"]
+        DNS_H["tcp.rapold.io\n→ 104.21.53.149"]
+        DNS_S["socks.rapold.io\n→ 104.21.53.149"]
+        DNS_D["proxy-api.rapold.io"]
+        DNS_DASH["proxy.rapold.io → Vercel"]
     end
 
     subgraph PVE["🖥️ pve1.rapold.io — Proxmox Host"]
@@ -60,15 +61,17 @@ flowchart TD
 
     subgraph LXC["📦 CT 105 — Debian 12 LXC  192.168.1.50"]
         direction TB
+        WSS_H["wstunnel server\n:8383 → 127.0.0.1:38128"]
+        WSS_S["wstunnel server\n:8384 → 127.0.0.1:31080"]
         P38["3proxy\n:38128 HTTP CONNECT"]
         P31["3proxy\n:31080 SOCKS5"]
-        DASH["Dashboard\n:8080 HTTP"]
+        API["Backend API\n:8080 HTTP"]
         NFT["nftables\ndrop-all ingress"]
         F2B["fail2ban\n5 retries → 1h ban"]
 
-        NFT -->|allows :38128 :31080 :8080| P38
-        NFT -->|allows :38128 :31080 :8080| P31
-        NFT -->|allows :38128 :31080 :8080| DASH
+        NFT -->|allows| WSS_H & WSS_S & P38 & P31 & API
+        WSS_H --> P38
+        WSS_S --> P31
         P38 & P31 --> F2B
     end
 
@@ -76,13 +79,17 @@ flowchart TD
         EGR["Egress IP\n213.3.19.53\nZürich · AS3303 Swisscom"]
     end
 
-    CL -->|"TLS (outbound only)"| DNS_H
-    CL -->|"TLS (outbound only)"| DNS_S
-    DNS_H & DNS_S & DNS_D -->|"Cloudflare Tunnel\n(no open ports on router)"| CFD
-    CFD -->|"LAN 192.168.1.x"| P38
-    CFD -->|"LAN 192.168.1.x"| P31
-    CFD -->|"LAN 192.168.1.x"| DASH
+    WS -->|"WebSocket / TLS\n(outbound only)"| DNS_H
+    DNS_H & DNS_S -->|"HTTP → Cloudflare Tunnel\n(no open ports on router)"| CFD
+    DNS_D -->|"HTTP → Cloudflare Tunnel"| CFD
+    CFD -->|"LAN 192.168.1.x"| WSS_H & WSS_S & API
     P38 & P31 --> EGR
+
+    subgraph DASH["📊 Dashboard"]
+        VER["proxy.rapold.io\nVercel · Next.js 15\nIP-restricted: 213.3.19.53"]
+    end
+    DNS_DASH --> VER
+    API -->|"SSE live logs"| VER
 
     subgraph CICD["⚙️ GitHub Actions"]
         GHA["deploy.yml\nTailscale SSH → pct exec\nSmoke-test CH egress"]
@@ -96,6 +103,7 @@ flowchart TD
     style LXC    fill:#1a2a1a,stroke:#3fb950,color:#e6edf3
     style CH     fill:#2a1f1a,stroke:#d29922,color:#e6edf3
     style CICD   fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
+    style DASH   fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
 ```
 
 **Key design decisions:**
@@ -103,6 +111,7 @@ flowchart TD
 | Decision | Reason |
 |----------|--------|
 | Cloudflare Tunnel instead of port-forwarding | No router changes needed; traffic encrypted end-to-end |
+| wstunnel (WebSocket bridge) instead of cloudflared access | Works through Cloudflare's orange-cloud proxy without Cloudflare Access/Zero Trust setup |
 | Dedicated LXC container | Isolation; proxy can't touch host or other VMs |
 | Local-managed tunnel (not Dashboard) | Config lives in git; reproducible deploys |
 | 3proxy | Lightweight (~200 KB binary), HTTP + SOCKS5, native `auth strong` |
@@ -415,22 +424,29 @@ See [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) for the full 
 
 ## Client Setup
 
-Clients connect via **`cloudflared access tcp`** — this creates a local TCP listener that forwards traffic through the Cloudflare Tunnel to the proxy.
+Clients use **[wstunnel](https://github.com/erebe/wstunnel)** — a single binary that creates a local TCP listener forwarding traffic via WebSocket over HTTPS through Cloudflare's network to the proxy. No Cloudflare account or authentication required.
 
 ### HTTP Proxy
 
-**Step 1 — Install cloudflared**
+**Step 1 — Install wstunnel**
 
 | OS | Command |
 |----|---------|
-| macOS | `brew install cloudflared` |
-| Windows | `winget install Cloudflare.cloudflared` |
-| Linux (deb) | `curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cf.deb && sudo dpkg -i cf.deb` |
+| macOS (Homebrew) | `brew install wstunnel` |
+| macOS (manual) | `curl -sL https://github.com/erebe/wstunnel/releases/latest/download/wstunnel_$(curl -s https://api.github.com/repos/erebe/wstunnel/releases/latest \| grep tag_name \| cut -d'"' -f4 \| tr -d v)_darwin_arm64.tar.gz \| tar -xz -C /usr/local/bin/` |
+| Windows | Download from [releases](https://github.com/erebe/wstunnel/releases/latest), add to PATH |
+| Linux (amd64) | `curl -sL https://github.com/erebe/wstunnel/releases/latest/download/wstunnel_..._linux_amd64.tar.gz \| sudo tar -xz -C /usr/local/bin/` |
+
+Or use the helper script:
+```bash
+./scripts/connect-macos.sh install   # macOS only
+```
 
 **Step 2 — Open tunnel**
 
 ```bash
-cloudflared access tcp --hostname proxy.rapold.io --url localhost:8128
+# HTTP CONNECT proxy on localhost:8128
+wstunnel client -L "tcp://127.0.0.1:8128:127.0.0.1:38128" wss://tcp.rapold.io
 ```
 
 **Step 3 — Configure proxy**
@@ -446,14 +462,15 @@ Password:  <PROXY_PASSWORD>
 **Test:**
 
 ```bash
-curl -x http://<PROXY_USERNAME>:<PROXY_PASSWORD>@localhost:8128 https://ipinfo.io
-# Expected: "country": "CH", "city": "Zürich"
+curl -x http://<PROXY_USERNAME>:<PROXY_PASSWORD>@127.0.0.1:8128 https://ipinfo.io
+# Expected: "country": "CH", "city": "Zürich", "ip": "213.3.19.53"
 ```
 
 ### SOCKS5
 
 ```bash
-cloudflared access tcp --hostname socks.rapold.io --url localhost:1080
+# SOCKS5 proxy on localhost:1080
+wstunnel client -L "tcp://127.0.0.1:1080:127.0.0.1:31080" wss://socks.rapold.io
 ```
 
 ```
@@ -470,19 +487,26 @@ Connection string:
 socks5://<PROXY_USERNAME>:<PROXY_PASSWORD>@127.0.0.1:1080
 ```
 
+### macOS One-Command Setup
+
+```bash
+./scripts/connect-macos.sh start   # starts wstunnel + sets system proxy
+./scripts/connect-macos.sh stop    # stops tunnel + clears system proxy
+./scripts/connect-macos.sh status  # shows state
+```
+
 ### Browser (FoxyProxy)
 
-1. Install [FoxyProxy](https://getfoxyproxy.org/) for Firefox or Chrome
-2. Add proxy:
+1. Start the wstunnel client (Step 2 above)
+2. Install [FoxyProxy](https://getfoxyproxy.org/) for Firefox or Chrome
+3. Add proxy:
    - Type: `HTTP`
    - Server: `127.0.0.1`
    - Port: `8128`
    - Username / Password: as above
-3. Activate for desired sites or globally
+4. Activate for desired sites or globally
 
 ### Autostart
-
-Keep `cloudflared access tcp` running in the background:
 
 **macOS (launchd)** — `~/Library/LaunchAgents/io.rapold.proxy-ch.plist`:
 
@@ -495,14 +519,15 @@ Keep `cloudflared access tcp` running in the background:
   <key>Label</key>              <string>io.rapold.proxy-ch</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/opt/homebrew/bin/cloudflared</string>
-    <string>access</string>
-    <string>tcp</string>
-    <string>--hostname</string> <string>proxy.rapold.io</string>
-    <string>--url</string>      <string>localhost:8128</string>
+    <string>/usr/local/bin/wstunnel</string>
+    <string>client</string>
+    <string>-L</string>         <string>tcp://127.0.0.1:8128:127.0.0.1:38128</string>
+    <string>wss://tcp.rapold.io</string>
   </array>
   <key>RunAtLoad</key>          <true/>
   <key>KeepAlive</key>          <true/>
+  <key>StandardOutPath</key>    <string>/tmp/wstunnel-proxy.log</string>
+  <key>StandardErrorPath</key>  <string>/tmp/wstunnel-proxy.log</string>
 </dict>
 </plist>
 ```
@@ -511,15 +536,15 @@ Keep `cloudflared access tcp` running in the background:
 launchctl load ~/Library/LaunchAgents/io.rapold.proxy-ch.plist
 ```
 
-**Linux (systemd)**:
+**Linux (systemd user)**:
 
 ```ini
 # ~/.config/systemd/user/proxy-ch.service
 [Unit]
-Description=CH Proxy Tunnel
+Description=CH Proxy via wstunnel
 
 [Service]
-ExecStart=cloudflared access tcp --hostname proxy.rapold.io --url localhost:8128
+ExecStart=wstunnel client -L tcp://127.0.0.1:8128:127.0.0.1:38128 wss://tcp.rapold.io
 Restart=always
 
 [Install]
@@ -530,10 +555,11 @@ WantedBy=default.target
 systemctl --user enable --now proxy-ch
 ```
 
-**Windows** — place a shortcut in `shell:startup` pointing to:
+**Windows** — create `proxy-ch.bat` in `shell:startup`:
 
-```
-cloudflared.exe access tcp --hostname proxy.rapold.io --url localhost:8128
+```bat
+@echo off
+wstunnel.exe client -L tcp://127.0.0.1:8128:127.0.0.1:38128 wss://tcp.rapold.io
 ```
 
 ---

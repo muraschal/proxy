@@ -6,14 +6,16 @@ tunnel: ${CF_TUNNEL_ID}
 credentials-file: /root/.cloudflared/${CF_TUNNEL_ID}.json
 
 ingress:
-  # HTTP CONNECT proxy (clients use: cloudflared access tcp --hostname tcp.rapold.io --url localhost:8128)
-  # NOTE: proxy.rapold.io now points to the Vercel dashboard
+  # HTTP CONNECT proxy via wstunnel WebSocket bridge
+  # DNS: orange cloud (proxied). No Cloudflare Access required.
+  # Clients use: wstunnel client -L tcp://127.0.0.1:8128:127.0.0.1:38128 wss://tcp.rapold.io
   - hostname: tcp.rapold.io
-    service: tcp://192.168.1.50:38128
+    service: http://192.168.1.50:8383
 
-  # SOCKS5 proxy (clients use: cloudflared access tcp --hostname socks.rapold.io --url localhost:1080)
+  # SOCKS5 proxy via wstunnel WebSocket bridge
+  # Clients use: wstunnel client -L tcp://127.0.0.1:1080:127.0.0.1:31080 wss://socks.rapold.io
   - hostname: socks.rapold.io
-    service: tcp://192.168.1.50:31080
+    service: http://192.168.1.50:8384
 
   # Backend API — consumed by the Next.js dashboard at proxy.rapold.io
   # CORS: allows https://proxy.rapold.io

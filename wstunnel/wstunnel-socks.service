@@ -1,0 +1,12 @@
+[Unit]
+Description=wstunnel WebSocket-to-TCP bridge for 3proxy SOCKS5
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wstunnel server --restrict-to 127.0.0.1:31080 ws://0.0.0.0:8384
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
