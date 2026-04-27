@@ -160,10 +160,11 @@ async def handle_sse(request):
     try:
         while True:
             try:
-                msg = await asyncio.wait_for(q.get(), timeout=20)
+                msg = await asyncio.wait_for(q.get(), timeout=5)
                 await response.write(f"data: {msg}\n\n".encode())
             except asyncio.TimeoutError:
-                await response.write(b": keep-alive\n\n")
+                # Frequent keep-alive beats Cloudflare's response buffering
+                await response.write(b": ping\n\n")
     except (ConnectionResetError, asyncio.CancelledError):
         pass
     finally:

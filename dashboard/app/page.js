@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api.proxy.rapold.io'
 const MAX_ROWS = 120
+const SPARKLINE_BUCKETS = 40   // 40 × 3s = last 2 min
+const BUCKET_MS = 3000
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -12,6 +14,37 @@ function fmt(bytes) {
   const k = 1024, s = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + s[i]
+}
+
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+
+function Sparkline({ data, color = '#58a6ff', height = 56 }) {
+  if (!data || data.length < 2) return (
+    <svg width="100%" height={height} style={{display:'block'}}>
+      <line x1="0" y1={height} x2="100%" y2={height} stroke="#30363d" strokeWidth="1"/>
+    </svg>
+  )
+  const w = 600, h = height
+  const max = Math.max(...data, 1)
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w
+    const y = h - (v / max) * (h - 4)
+    return `${x},${y}`
+  })
+  const area = `M0,${h} L${pts.join(' L')} L${w},${h} Z`
+  const line = `M${pts.join(' L')}`
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={height} preserveAspectRatio="none" style={{display:'block'}}>
+      <defs>
+        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0.02"/>
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#sg)"/>
+      <path d={line} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+    </svg>
+  )
 }
 
 function codeClass(code) {
@@ -63,14 +96,18 @@ function CodeBlock({ lines, copyText }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [rows, setRows]       = useState([])
-  const [stats, setStats]     = useState({})
-  const [status, setStatus]   = useState('loading') // loading | online | offline
-  const [sessionReq, setSReq] = useState(0)
-  const [sessionOut, setSOut] = useState(0)
-  const [sessionIn, setSIn]   = useState(0)
-  const newRowIds             = useRef(new Set())
-  const esRef                 = useRef(null)
+  const [rows, setRows]         = useState([])
+  const [stats, setStats]       = useState({})
+  const [status, setStatus]     = useState('loading')
+  const [sessionReq, setSReq]   = useState(0)
+  const [sessionOut, setSOut]   = useState(0)
+  const [sessionIn, setSIn]     = useState(0)
+  const [sparkReq, setSparkReq] = useState(Array(SPARKLINE_BUCKETS).fill(0))
+  const [sparkOut, setSparkOut] = useState(Array(SPARKLINE_BUCKETS).fill(0))
+  const bucketReq               = useRef(0)
+  const bucketOut               = useRef(0)
+  const newRowIds               = useRef(new Set())
+  const esRef                   = useRef(null)
 
   // ── Stats fetch ──────────────────────────────────────────────────────────
   const fetchStats = useCallback(async () => {
@@ -118,6 +155,8 @@ export default function Dashboard() {
         setSReq(n => n + 1)
         setSOut(n => n + entry.out_bytes)
         setSIn(n  => n + entry.in_bytes)
+        bucketReq.current += 1
+        bucketOut.current += entry.out_bytes
         fetchStats()
       }
 
@@ -132,12 +171,21 @@ export default function Dashboard() {
     fetchStats()
     connect()
 
-    const statsInterval = setInterval(fetchStats, 15000)
+    const statsInterval   = setInterval(fetchStats, 15000)
+
+    // Advance sparkline buckets every BUCKET_MS
+    const sparkInterval = setInterval(() => {
+      setSparkReq(prev => [...prev.slice(1), bucketReq.current])
+      setSparkOut(prev => [...prev.slice(1), bucketOut.current])
+      bucketReq.current = 0
+      bucketOut.current = 0
+    }, BUCKET_MS)
 
     return () => {
       es?.close()
       clearTimeout(retryTimer)
       clearInterval(statsInterval)
+      clearInterval(sparkInterval)
     }
   }, [fetchRecent, fetchStats])
 
@@ -200,6 +248,26 @@ export default function Dashboard() {
         <StatCard label="Active Users"    value={users.length}              color="purple" sub="unique proxy users" />
         <StatCard label="Session Requests" value={sessionReq.toLocaleString()} color="blue"  sub="since page load" />
         <StatCard label="Session Egress"  value={fmt(sessionOut)}           color="green"  sub="since page load" />
+      </div>
+
+      {/* Sparkline charts */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, padding:'0 24px 24px'}}>
+        <div className="stat-card" style={{padding:'16px 20px 12px'}}>
+          <div className="stat-label" style={{marginBottom:8}}>Requests / 3s</div>
+          <Sparkline data={sparkReq} color="#58a6ff" height={52}/>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:4,fontSize:11,color:'var(--muted)'}}>
+            <span>−{Math.round(SPARKLINE_BUCKETS * BUCKET_MS / 60000)} min</span>
+            <span>now</span>
+          </div>
+        </div>
+        <div className="stat-card" style={{padding:'16px 20px 12px'}}>
+          <div className="stat-label" style={{marginBottom:8}}>Egress / 3s</div>
+          <Sparkline data={sparkOut} color="#3fb950" height={52}/>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:4,fontSize:11,color:'var(--muted)'}}>
+            <span>−{Math.round(SPARKLINE_BUCKETS * BUCKET_MS / 60000)} min</span>
+            <span>now</span>
+          </div>
+        </div>
       </div>
 
       {/* Live traffic */}
