@@ -1,5 +1,5 @@
 {
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://api.proxy.rapold.io"
+    "NEXT_PUBLIC_API_URL": "https://proxy-api.rapold.io"
   }
 }
