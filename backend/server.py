@@ -34,24 +34,37 @@ ALLOWED_ORIGINS      = os.environ.get(
 
 # ── Log parser ────────────────────────────────────────────────────────────────
 
+# Actual log format from 3proxy.cfg:
+# logformat "L%y-%m-%d %H:%M:%S %N.%p %E %U %C:%c %R:%r %O %I %h %T"
+# Example line:
+# L26-04-27 20:35:33 PROXY.38128 00000 chproxy 192.168.1.101:44278 192.178.170.91:443 2018 8869 0 CONNECT www.youtube.com:443 HTTP/1.1
+# Fields: date time type.port code user client:port remote:rport out in %h(=0) method hostname [http_ver]
 LOG_RE = re.compile(
-    r"L(\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+"
-    r"(\w+\.\d+)\s+(\d+)\s+(\S+)\s+"
-    r"(\S+):(\d+)\s+(\S+):(\d+)\s+"
-    r"(\d+)\s+(\d+)\s+(\S+)\s+(\S+)"
+    r"L?(\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+"  # timestamp
+    r"(\w+\.\d+)\s+"                                  # type.port (e.g. PROXY.38128)
+    r"(\d+)\s+"                                       # error code
+    r"(\S+)\s+"                                       # username
+    r"(\S+):(\d+)\s+"                                 # client_ip:port
+    r"(\S+):(\d+)\s+"                                 # remote_ip:port
+    r"(\d+)\s+"                                       # bytes out
+    r"(\d+)\s+"                                       # bytes in
+    r"\S+\s+"                                         # %h field (skip — often '0')
+    r"(\S+)"                                          # method/proto (CONNECT, GET…)
+    r"(?:\s+(\S+))?"                                  # optional: actual hostname:port from %T
 )
 
 def parse_line(line: str) -> dict | None:
     m = LOG_RE.match(line.strip())
     if not m:
         return None
-    ts, typ, code, user, cip, cport, remote, rport, out_b, in_b, hostname, proto = m.groups()
+    ts, typ, code, user, cip, cport, remote, rport, out_b, in_b, proto, hostname = m.groups()
     return dict(
         ts=ts, type=typ, code=code, user=user,
         client_ip=cip, client_port=int(cport),
         remote=remote, remote_port=int(rport),
         out_bytes=int(out_b), in_bytes=int(in_b),
-        hostname=hostname, proto=proto,
+        hostname=hostname or remote,   # fall back to remote IP if no hostname
+        proto=proto,
     )
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -71,10 +84,9 @@ async def tail_logs():
             continue
         current = files[-1]
         if current not in position:
-            try:
-                position[current] = os.path.getsize(current)
-            except OSError:
-                position[current] = 0
+            # Read from beginning on first open so history is loaded into recent/stats.
+            # The deque is capped at RECENT_LINES so memory is bounded.
+            position[current] = 0
         try:
             with open(current, "r", errors="replace") as fh:
                 fh.seek(position[current])
