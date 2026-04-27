@@ -1,0 +1,22 @@
+# Cloudflare Tunnel configuration — proxy-ch
+# Local-managed tunnel (not Dashboard-managed).
+# Deploy via: systemctl start cloudflared-proxy-ch
+
+tunnel: ${CF_TUNNEL_ID}
+credentials-file: /root/.cloudflared/${CF_TUNNEL_ID}.json
+
+ingress:
+  # HTTP CONNECT proxy (clients use cloudflared access tcp)
+  - hostname: proxy.rapold.io
+    service: tcp://192.168.1.50:38128
+
+  # SOCKS5 proxy (clients use cloudflared access tcp)
+  - hostname: socks.rapold.io
+    service: tcp://192.168.1.50:31080
+
+  # Live traffic dashboard (HTTP — served by dashboard app on CT 105)
+  - hostname: dashboard.rapold.io
+    service: http://192.168.1.50:8080
+
+  # Catch-all
+  - service: http_status:404

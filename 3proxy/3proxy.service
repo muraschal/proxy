@@ -1,0 +1,13 @@
+[Unit]
+Description=3proxy forward proxy
+After=network.target
+
+[Service]
+Type=simple
+User=3proxy
+ExecStart=/usr/local/3proxy/bin/3proxy /usr/local/3proxy/conf/3proxy.cfg
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

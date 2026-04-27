@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>proxy-ch · Live Traffic</title>
+  <style>
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --green:   #3fb950;
+      --blue:    #58a6ff;
+      --orange:  #d29922;
+      --red:     #f85149;
+      --mono:    "SF Mono", "Fira Code", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header h1 span { color: var(--blue); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #1a2a1a;
+      color: var(--green);
+      border: 1px solid #2a3a2a;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: .4; }
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      padding: 24px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+    .stat-card .label { font-size: 12px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-card .value { font-size: 28px; font-weight: 700; font-family: var(--mono); }
+    .stat-card .value.green  { color: var(--green); }
+    .stat-card .value.blue   { color: var(--blue); }
+    .stat-card .value.orange { color: var(--orange); }
+
+    .section {
+      padding: 0 24px 24px;
+    }
+    .section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 12px;
+    }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-weight: 500;
+      font-family: -apple-system, sans-serif;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    td {
+      padding: 7px 12px;
+      border-bottom: 1px solid #1c2128;
+      white-space: nowrap;
+    }
+    tr:hover td { background: #1c2128; }
+    .code-ok   { color: var(--green); }
+    .code-err  { color: var(--red); }
+    .code-auth { color: var(--orange); }
+    .flash {
+      animation: flash .4s ease-out;
+    }
+    @keyframes flash {
+      from { background: #1c3a5a; }
+      to   { background: transparent; }
+    }
+
+    /* User stats table */
+    .user-table { width: 100%; border-collapse: collapse; }
+    .user-table th { text-align: left; padding: 8px 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    .user-table td { padding: 8px 12px; border-bottom: 1px solid #1c2128; font-family: var(--mono); font-size: 12px; }
+
+    .bar-bg { background: #21262d; border-radius: 4px; height: 6px; width: 100%; overflow: hidden; margin-top: 4px; }
+    .bar-fill { height: 6px; border-radius: 4px; background: var(--blue); transition: width .3s; }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>proxy<span>-ch</span> · Live Traffic</h1>
+  <div class="badge"><div class="dot"></div> Live · 213.3.19.53 · Zürich · CH</div>
+</header>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="label">Requests (session)</div>
+    <div class="value blue" id="st-req">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Egress</div>
+    <div class="value green" id="st-out">0 B</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Ingress</div>
+    <div class="value orange" id="st-in">0 B</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Active users</div>
+    <div class="value blue" id="st-users">0</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Live Stream</h2>
+  <div class="table-wrap">
+    <table id="log-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>User</th>
+          <th>Client</th>
+          <th>Destination</th>
+          <th>Proto</th>
+          <th>Code</th>
+          <th>↑ Out</th>
+          <th>↓ In</th>
+        </tr>
+      </thead>
+      <tbody id="log-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Per-user Stats</h2>
+  <table class="user-table" id="user-table">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Requests</th>
+        <th>Egress</th>
+        <th>Ingress</th>
+        <th>Traffic</th>
+      </tr>
+    </thead>
+    <tbody id="user-body"></tbody>
+  </table>
+</div>
+
+<footer>proxy-ch · pve1.rapold.io · CT 105 · 3proxy + Cloudflare Tunnel</footer>
+
+<script>
+const MAX_ROWS = 100;
+let sessionReq = 0, sessionOut = 0, sessionIn = 0;
+
+function fmt(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024, sizes = ['B','KB','MB','GB','TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function codeClass(code) {
+  const n = parseInt(code, 10);
+  if (n === 0) return 'code-ok';
+  if (n >= 40 && n <= 79) return 'code-auth';
+  return 'code-err';
+}
+
+function addRow(e) {
+  const tbody = document.getElementById('log-body');
+  const tr = document.createElement('tr');
+  tr.className = 'flash';
+  tr.innerHTML = `
+    <td>${e.ts}</td>
+    <td>${e.user}</td>
+    <td>${e.client_ip}</td>
+    <td>${e.hostname || e.remote}${e.remote_port !== 80 && e.remote_port !== 443 ? ':'+e.remote_port : ''}</td>
+    <td>${e.proto}</td>
+    <td class="${codeClass(e.code)}">${e.code}</td>
+    <td>${fmt(e.out_bytes)}</td>
+    <td>${fmt(e.in_bytes)}</td>
+  `;
+  tbody.insertBefore(tr, tbody.firstChild);
+  while (tbody.rows.length > MAX_ROWS) tbody.deleteRow(tbody.rows.length - 1);
+
+  sessionReq++;
+  sessionOut += e.out_bytes;
+  sessionIn  += e.in_bytes;
+  document.getElementById('st-req').textContent = sessionReq;
+  document.getElementById('st-out').textContent = fmt(sessionOut);
+  document.getElementById('st-in').textContent  = fmt(sessionIn);
+}
+
+async function loadRecent() {
+  const res = await fetch('/api/recent');
+  if (!res.ok) return;
+  const rows = await res.json();
+  rows.reverse().forEach(addRow);
+}
+
+async function loadStats() {
+  const res = await fetch('/api/stats');
+  if (!res.ok) return;
+  const data = await res.json();
+  const users = Object.entries(data);
+  const maxOut = Math.max(...users.map(([,v]) => v.out_bytes), 1);
+  const tbody = document.getElementById('user-body');
+  tbody.innerHTML = '';
+  document.getElementById('st-users').textContent = users.length;
+  users.sort((a,b) => b[1].requests - a[1].requests).forEach(([user, v]) => {
+    const pct = Math.round(v.out_bytes / maxOut * 100);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${user}</td>
+      <td>${v.requests}</td>
+      <td>${fmt(v.out_bytes)}</td>
+      <td>${fmt(v.in_bytes)}</td>
+      <td><div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// SSE
+const es = new EventSource('/events');
+es.onmessage = e => {
+  const entry = JSON.parse(e.data);
+  addRow(entry);
+  loadStats();
+};
+es.onerror = () => {
+  console.warn('SSE disconnected, retrying…');
+};
+
+// Bootstrap
+loadRecent().then(loadStats);
+setInterval(loadStats, 10000);
+</script>
+</body>
+</html>

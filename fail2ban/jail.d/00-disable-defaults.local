@@ -1,0 +1,5 @@
+# Disable the default sshd jail.
+# LXC containers do not have /var/log/auth.log by default,
+# which causes fail2ban to fail on startup.
+[sshd]
+enabled = false

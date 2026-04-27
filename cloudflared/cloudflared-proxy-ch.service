@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudflare Tunnel – proxy-ch
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloudflared tunnel \
+  --config /etc/cloudflared/proxy-ch.yml \
+  --no-autoupdate run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
