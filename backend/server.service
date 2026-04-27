@@ -1,0 +1,17 @@
+[Unit]
+Description=proxy-ch Backend API
+After=network.target 3proxy.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/proxy-backend
+ExecStart=/opt/proxy-backend/venv/bin/python server.py
+Environment=LOG_DIR=/usr/local/3proxy/logs
+Environment=API_PORT=8080
+Environment=ALLOWED_ORIGINS=https://proxy.rapold.io,https://dashboard.rapold.io
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

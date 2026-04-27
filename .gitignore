@@ -1,13 +1,18 @@
 # Credentials — never commit these
 *.pem
 *.key
-*.json
 passwd
 .env
 .env.*
 
-# cloudflared tunnel credentials
-*.cloudflared/
+# Cloudflare tunnel credential files (UUID-named JSON files in .cloudflared)
+.cloudflared/*.json
+/root/.cloudflared/
+
+# Next.js
+.next/
+out/
+node_modules/
 
 # Python
 __pycache__/

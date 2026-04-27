@@ -88,7 +88,7 @@ jobs:
           # Sync files into LXC via pct push
           ssh pve-1 bash -s <<'ENDSSH'
           LXC_ID="${LXC_ID}"
-          for dir in 3proxy nftables fail2ban/filter.d fail2ban/jail.d dashboard; do
+          for dir in 3proxy nftables fail2ban/filter.d fail2ban/jail.d backend; do
             pct exec $LXC_ID -- mkdir -p /tmp/deploy/$dir
           done
 
@@ -120,28 +120,27 @@ jobs:
           '
           ENDSSH
 
-      # ── Deploy dashboard ────────────────────────────────────────────────────
-      - name: Deploy dashboard
-        if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'dashboard' || github.event_name == 'push' }}
+      # ── Deploy backend API to LXC ───────────────────────────────────────────
+      - name: Deploy backend API (CT 105)
+        if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'lxc' || github.event_name == 'push' }}
         run: |
           LXC_ID="${{ vars.LXC_ID || '105' }}"
           ssh pve-1 <<ENDSSH
           pct exec $LXC_ID -- bash -c '
-            mkdir -p /opt/proxy-dashboard
-            cp /tmp/deploy/dashboard/dashboard.py /opt/proxy-dashboard/
-            cp /tmp/deploy/dashboard/index.html   /opt/proxy-dashboard/
-            cp /tmp/deploy/dashboard/requirements.txt /opt/proxy-dashboard/
-            if [ ! -d /opt/proxy-dashboard/venv ]; then
-              python3 -m venv /opt/proxy-dashboard/venv
+            mkdir -p /opt/proxy-backend
+            cp /tmp/deploy/backend/server.py          /opt/proxy-backend/
+            cp /tmp/deploy/backend/requirements.txt   /opt/proxy-backend/
+            if [ ! -d /opt/proxy-backend/venv ]; then
+              python3 -m venv /opt/proxy-backend/venv
             fi
-            /opt/proxy-dashboard/venv/bin/pip install -q \
-              -r /opt/proxy-dashboard/requirements.txt
-            cp /tmp/deploy/dashboard/dashboard.service \
-              /etc/systemd/system/proxy-dashboard.service
+            /opt/proxy-backend/venv/bin/pip install -q \
+              -r /opt/proxy-backend/requirements.txt
+            cp /tmp/deploy/backend/server.service \
+              /etc/systemd/system/proxy-backend.service
             systemctl daemon-reload
-            systemctl enable --now proxy-dashboard
-            systemctl restart proxy-dashboard
-            echo "dashboard: $(systemctl is-active proxy-dashboard)"
+            systemctl enable --now proxy-backend
+            systemctl restart proxy-backend
+            echo "backend: $(systemctl is-active proxy-backend)"
           '
           ENDSSH
 

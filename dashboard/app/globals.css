@@ -1,0 +1,212 @@
+:root {
+  --bg:      #0d1117;
+  --surface: #161b22;
+  --surface2:#1c2128;
+  --border:  #30363d;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --green:   #3fb950;
+  --blue:    #58a6ff;
+  --orange:  #d29922;
+  --red:     #f85149;
+  --purple:  #a371f7;
+  --mono:    "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────── */
+.layout { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+.logo span { color: var(--blue); }
+.ch-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  background: #1a2332; border: 1px solid #2a3a52; color: var(--blue);
+}
+
+/* ── Status badge ─────────────────────────────────────────────────────── */
+.status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+}
+.status-badge.online  { background: #1a2a1a; border: 1px solid #2a3a2a; color: var(--green); }
+.status-badge.offline { background: #2a1a1a; border: 1px solid #3a2a2a; color: var(--red); }
+.status-badge.loading { background: #1a1f2e; border: 1px solid #2a2f4e; color: var(--muted); }
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+}
+.dot.pulse { animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Stats grid ───────────────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px; padding: 24px;
+}
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 20px;
+  transition: border-color .2s;
+}
+.stat-card:hover { border-color: #484f58; }
+.stat-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px;
+}
+.stat-value {
+  font-size: 30px; font-weight: 700; font-family: var(--mono);
+  line-height: 1;
+}
+.stat-value.blue   { color: var(--blue); }
+.stat-value.green  { color: var(--green); }
+.stat-value.orange { color: var(--orange); }
+.stat-value.purple { color: var(--purple); }
+.stat-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* ── Sections ─────────────────────────────────────────────────────────── */
+.section { padding: 0 24px 28px; }
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .09em;
+}
+.section-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead { background: var(--surface2); }
+th {
+  text-align: left; padding: 9px 14px;
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .07em;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #1c2128;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--surface2); }
+
+.flash { animation: rowflash .5s ease-out; }
+@keyframes rowflash { from { background: #1c3a5a; } to { background: transparent; } }
+
+.code-ok   { color: var(--green); }
+.code-auth { color: var(--orange); }
+.code-err  { color: var(--red); }
+.hostname  { color: var(--blue); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.user-chip {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  background: #1a2332; color: var(--blue); font-size: 11px;
+}
+
+/* ── User stats ───────────────────────────────────────────────────────── */
+.user-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.user-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px;
+}
+.user-name { font-family: var(--mono); font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--blue); }
+.user-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.user-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.user-stat-val   { font-size: 14px; font-weight: 600; font-family: var(--mono); margin-top: 2px; }
+.bar-bg   { background: var(--surface2); border-radius: 4px; height: 4px; overflow: hidden; }
+.bar-fill { height: 4px; border-radius: 4px; background: var(--blue); transition: width .4s; }
+
+/* ── Connect section ──────────────────────────────────────────────────── */
+.connect-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+.connect-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 20px;
+}
+.connect-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+.connect-card h3 .tag {
+  display: inline-block; font-size: 10px; padding: 1px 7px;
+  border-radius: 10px; background: #1a2332; color: var(--blue);
+  margin-left: 8px; font-weight: 500; vertical-align: middle;
+}
+.code-block {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 12px 14px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.7;
+  position: relative; overflow-x: auto;
+}
+.code-block .key   { color: var(--muted); }
+.code-block .val   { color: var(--green); }
+.copy-btn {
+  position: absolute; top: 8px; right: 8px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 3px 9px; font-size: 11px;
+  color: var(--muted); cursor: pointer; transition: all .15s;
+}
+.copy-btn:hover { color: var(--text); border-color: #484f58; }
+.copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+/* ── Egress info ──────────────────────────────────────────────────────── */
+.egress-bar {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  padding: 14px 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; margin: 0 24px 24px;
+}
+.egress-item { display: flex; flex-direction: column; gap: 2px; }
+.egress-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+.egress-value { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+footer {
+  margin-top: auto;
+  padding: 16px 24px; text-align: center;
+  font-size: 11px; color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+
+/* ── Divider ──────────────────────────────────────────────────────────── */
+.divider { height: 1px; background: var(--border); margin: 4px 24px 24px; }
+
+@media (max-width: 600px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; padding: 16px; gap: 12px; }
+  .section { padding: 0 16px 20px; }
+  header { padding: 12px 16px; }
+  .egress-bar { margin: 0 16px 16px; }
+}
